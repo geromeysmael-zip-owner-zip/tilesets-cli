@@ -4,7 +4,7 @@ import pytest
 from click.testing import CliRunner
 from unittest import mock
 
-from tilesets.scripts.cli import validate_recipe
+from tilesets.scripts.cli import validate as validate_recipe
 
 
 class MockResponse:

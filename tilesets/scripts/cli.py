@@ -1,5 +1,4 @@
 """Tilesets command line interface"""
-import os
 import json
 import requests
 
@@ -9,22 +8,10 @@ import click
 import cligj
 
 import tilesets
-from tilesets import utils, errors
+from tilesets import errors
 
-
-def _get_token(token=None):
-    """Get Mapbox access token from arg or environment"""
-    if token is not None:
-        return token
-    else:
-        return os.environ.get("MAPBOX_ACCESS_TOKEN") or os.environ.get(
-            "MapboxAccessToken"
-        )
-
-
-def _get_api():
-    """Get Mapbox tileset API base URL from environment"""
-    return os.environ.get("MAPBOX_API", "https://api.mapbox.com")
+from tilesets.utils import _get_api, _get_token, validate_tileset_id, validate_geojson
+from tilesets import MapboxTilesetSession
 
 
 @click.version_option(version=tilesets.__version__, message="%(version)s")
@@ -49,7 +36,12 @@ def cli():
 )
 @click.option("--name", "-n", required=True, type=str, help="name of the tileset")
 @click.option(
-    "--description", "-d", required=False, type=str, help="description of the tileset"
+    "--description",
+    "-d",
+    required=False,
+    type=str,
+    help="description of the tileset",
+    default="",
 )
 @click.option(
     "--privacy",
@@ -70,27 +62,24 @@ def create(
     <tileset_id> is in the form of username.handle - for example "mapbox.neat-tileset".
     The handle may only include "-" or "_" special characters.
     """
-    mapbox_api = _get_api()
-    mapbox_token = _get_token(token)
-    url = "{0}/tilesets/v1/{1}?access_token={2}".format(
-        mapbox_api, tileset, mapbox_token
+    Tilesets = MapboxTilesetSession(
+        mapbox_api=_get_api(), mapbox_token=_get_token(token)
     )
-    body = {}
-    body["name"] = name or ""
-    body["description"] = description or ""
-    if privacy:
-        body["private"] = True if privacy == "private" else False
 
-    if not utils.validate_tileset_id(tileset):
+    if not validate_tileset_id(tileset):
         raise errors.TilesetNameError
 
-    if recipe:
-        with open(recipe) as json_recipe:
-            body["recipe"] = json.load(json_recipe)
+    with open(recipe) as src:
+        json_recipe = json.load(src)
 
-    r = requests.post(url, json=body)
+    private = privacy == "private"
 
-    click.echo(json.dumps(r.json(), indent=indent))
+    r = Tilesets.create_tileset(
+        tileset, json_recipe, name=name, description=description, private=private
+    )
+
+    print(r.to_dict())
+    # click.echo(json.dumps(r, indent=indent))
 
 
 @cli.command("publish")
@@ -127,14 +116,13 @@ def status(tileset, token=None, indent=None):
 
     tilesets status <tileset_id>
     """
-    mapbox_api = _get_api()
-    mapbox_token = _get_token(token)
-    url = "{0}/tilesets/v1/{1}/status?access_token={2}".format(
-        mapbox_api, tileset, mapbox_token
+    Tilesets = MapboxTilesetSession(
+        mapbox_api=_get_api(), mapbox_token=_get_token(token)
     )
-    r = requests.get(url)
 
-    click.echo(json.dumps(r.json(), indent=indent))
+    r = Tilesets.status(tileset)
+
+    click.echo(json.dumps(r, indent=indent))
 
 
 @cli.command("jobs")
@@ -201,42 +189,41 @@ def list(username, verbose, token=None, indent=None):
 
     tilests list <username>
     """
-    mapbox_api = _get_api()
-    mapbox_token = _get_token(token)
-    url = "{0}/tilesets/v1/{1}?access_token={2}".format(
-        mapbox_api, username, mapbox_token
+    Tilesets = MapboxTilesetSession(
+        mapbox_api=_get_api(), mapbox_token=_get_token(token)
     )
-    r = requests.get(url)
-    if r.status_code == 200:
-        if verbose:
-            for tileset in r.json():
-                click.echo(json.dumps(tileset, indent=indent))
-        else:
-            for tileset in r.json():
-                click.echo(tileset["id"])
+
+    tilesets = Tilesets.list_tilesets(username)
+
+    if not verbose:
+        tilesets = (tileset.id for tileset in tilesets)
     else:
-        raise errors.TilesetsError(r.text)
+        tilesets = (
+            json.dumps(tileset.to_dict(), indent=indent) for tileset in tilesets
+        )
+
+    for tileset in tilesets:
+        click.echo(tileset)
 
 
 @cli.command("validate-recipe")
 @click.argument("recipe", required=True, type=click.Path(exists=True))
 @click.option("--token", "-t", required=False, type=str, help="Mapbox access token")
 @click.option("--indent", type=int, default=None, help="Indent for JSON output")
-def validate_recipe(recipe, token=None, indent=None):
+def validate(recipe, token=None, indent=None):
     """Validate a Recipe JSON document
 
     tilesets validate-recipe <path_to_recipe>
     """
-    mapbox_api = _get_api()
-    mapbox_token = _get_token(token)
-    url = "{0}/tilesets/v1/validateRecipe?access_token={1}".format(
-        mapbox_api, mapbox_token
+    Tilesets = MapboxTilesetSession(
+        mapbox_api=_get_api(), mapbox_token=_get_token(token)
     )
+
     with open(recipe) as json_recipe:
         recipe_json = json.load(json_recipe)
+        validated = Tilesets.validate_recipe(recipe_json)
 
-        r = requests.put(url, json=recipe_json)
-        click.echo(json.dumps(r.json(), indent=indent))
+        click.echo(json.dumps(validated, indent=indent))
 
 
 @cli.command("view-recipe")
@@ -281,7 +268,8 @@ def update_recipe(tileset, recipe, token=None, indent=None):
         r = requests.patch(url, json=recipe_json)
         if r.status_code == 201:
             click.echo("Updated recipe.", err=True)
-            click.echo(json.dumps(r.json(), indent=indent))
+            click.echo(r.text)
+            # click.echo(json.dumps(r.json(), indent=indent))
         else:
             raise errors.TilesetsError(r.text)
 
@@ -295,7 +283,7 @@ def validate_source(features):
     click.echo(f"Validating features", err=True)
 
     for feature in features:
-        utils.validate_geojson(feature)
+        validate_geojson(feature)
 
     click.echo("✔ valid")
 
@@ -320,7 +308,7 @@ def add_source(ctx, username, id, features, no_validation, token=None, indent=No
         for feature in features:
             url = f"{mapbox_api}/tilesets/v1/sources/{username}/{id}?access_token={mapbox_token}"
             if not no_validation:
-                utils.validate_geojson(feature)
+                validate_geojson(feature)
 
             io.write((json.dumps(feature) + "\n").encode("utf-8"))
 

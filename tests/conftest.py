@@ -13,6 +13,7 @@ class _MockResponse:
         self.text = json.dumps(mock_json)
         self._json = mock_json
         self.status_code = status_code
+        self.links = {}
 
     def MockResponse(self):
         return self

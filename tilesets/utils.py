@@ -1,3 +1,4 @@
+import os
 import re
 
 from jsonschema import validate
@@ -69,3 +70,18 @@ def validate_geojson(feature):
     }
 
     return validate(instance=feature, schema=schema)
+
+
+def _get_token(token=None):
+    """Get Mapbox access token from arg or environment"""
+    if token is not None:
+        return token
+    else:
+        return os.environ.get("MAPBOX_ACCESS_TOKEN") or os.environ.get(
+            "MapboxAccessToken"
+        )
+
+
+def _get_api():
+    """Get Mapbox tileset API base URL from environment"""
+    return os.environ.get("MAPBOX_API", "https://api.mapbox.com")
