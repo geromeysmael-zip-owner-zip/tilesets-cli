@@ -12,7 +12,9 @@ CLI for interacting with and preparing data for [Mapbox Tilesets API](https://do
 
 ```shell
 # clone
-git clone git@github.com:mapbox/tilesets-cli.git
+git clone git@github.com:mapbox/tilesets-cli.git 
+# or if you have not authenticated git client
+git clone https://github.com/mapbox/tilesets-cli.git
 cd tilesets-cli
 
 # virtual env (optional)
