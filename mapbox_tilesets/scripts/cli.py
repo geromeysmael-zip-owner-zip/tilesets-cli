@@ -6,10 +6,11 @@ import tempfile
 
 import click
 import cligj
+from tqdm import tqdm
 from contextlib import ExitStack
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
-from requests_toolbelt import MultipartEncoder
+from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 
 import mapbox_tilesets
 from mapbox_tilesets import utils, errors
@@ -452,14 +453,21 @@ def _upload_source(file, url=None):
     """Upload an individual source part
     """
     m = MultipartEncoder(fields={"file": ("file", file)})
-    resp = requests.post(
-        url,
-        data=m,
-        headers={
-            "Content-Disposition": "multipart/form-data",
-            "Content-type": m.content_type,
-        },
-    )
+    with tqdm(total=m.len, desc=file.name) as prog:
+
+        def callback(e):
+            # prog.position = e.bytes_read
+            prog.update(e.bytes_read)
+
+        monitor = MultipartEncoderMonitor(m, callback)
+        resp = requests.post(
+            url,
+            data=monitor,
+            headers={
+                "Content-Disposition": "multipart/form-data",
+                "Content-type": monitor.content_type,
+            },
+        )
 
     if resp.status_code == 200:
         return resp.json()
