@@ -16,11 +16,13 @@ def _get_token(token=None):
     """Get Mapbox access token from arg or environment"""
     if token is not None:
         return token
-    else:
-        return os.environ.get("MAPBOX_ACCESS_TOKEN") or os.environ.get(
-            "MapboxAccessToken"
-        )
 
+    token = os.environ.get("MAPBOX_ACCESS_TOKEN") or os.environ.get("MapboxAccessToken")
+
+    if token is not None:
+        return token
+
+    raise errors.TilesetsError("No access token provided")
 
 def _get_api():
     """Get Mapbox tileset API base URL from environment"""
