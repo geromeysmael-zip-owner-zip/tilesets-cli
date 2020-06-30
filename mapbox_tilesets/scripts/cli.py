@@ -449,32 +449,6 @@ def validate_source(features):
     click.echo("✔ valid")
 
 
-def _upload_source(file, url=None):
-    """Upload an individual source part
-    """
-    m = MultipartEncoder(fields={"file": ("file", file)})
-    with tqdm(total=m.len, desc=file.name) as prog:
-
-        def callback(e):
-            # prog.position = e.bytes_read
-            prog.update(e.bytes_read)
-
-        monitor = MultipartEncoderMonitor(m, callback)
-        resp = requests.post(
-            url,
-            data=monitor,
-            headers={
-                "Content-Disposition": "multipart/form-data",
-                "Content-type": monitor.content_type,
-            },
-        )
-
-    if resp.status_code == 200:
-        return resp.json()
-    else:
-        raise errors.TilesetsError(resp.text)
-
-
 @cli.command("add-source")
 @click.argument("username", required=True, type=str)
 @click.argument("id", required=True, type=str)
@@ -493,6 +467,34 @@ def add_source(
 
     tilesets add-source <username> <id> <path/to/source/data>
     """
+
+    def _upload_source(file, url=None):
+        """Upload an individual source part
+        """
+        m = MultipartEncoder(fields={"file": ("file", file)})
+        with tqdm(total=m.len, unit="B") as prog:
+
+            def callback(e):
+                # print(e.bytes_read / 1024)
+                # print(e.bytes_read / m.len * 100)
+                # prog.update(int(e.bytes_read / m.len * 100))
+                prog.update(1024 * 8)
+
+            monitor = MultipartEncoderMonitor(m, callback)
+            resp = requests.post(
+                url,
+                data=monitor,
+                headers={
+                    "Content-Disposition": "multipart/form-data",
+                    "Content-type": monitor.content_type,
+                },
+            )
+
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            raise errors.TilesetsError(resp.text)
+
     mapbox_api = _get_api()
     mapbox_token = _get_token(token)
     url = (
@@ -510,9 +512,17 @@ def add_source(
         for file in tmpfiles:
             file.seek(0)
         upload_source = partial(_upload_source, url=url)
-        with ThreadPoolExecutor(max_workers=4) as exec:
-            for resp in exec.map(upload_source, tmpfiles):
-                click.echo(json.dumps(resp, indent=indent))
+        with ThreadPoolExecutor(max_workers=10) as exec:
+            exec.map(upload_source, tmpfiles)
+
+        view_url = "{0}/tilesets/v1/sources/{1}/{2}?access_token={3}".format(
+            mapbox_api, username, id, mapbox_token
+        )
+        r = requests.get(view_url)
+        if r.status_code == 200:
+            click.echo(json.dumps(r.json(), indent=indent))
+        else:
+            raise errors.TilesetsError(r.text)
 
 
 @cli.command("view-source")
