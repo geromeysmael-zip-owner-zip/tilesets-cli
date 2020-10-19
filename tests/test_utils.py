@@ -121,3 +121,32 @@ def test_calculate_tiles_area_with_1cm_precision():
     features = json.load(f)
     area = round(calculate_tiles_area(features, "1cm"))
     assert area == 2
+
+
+# benchmark tests
+def test_calculate_tiles_area_10m_benchmark(benchmark):
+    filename = "tests/fixtures/precision-testing.ldgeojson"
+    f = open(filename)
+    features = json.load(f)
+    benchmark.pedantic(calculate_tiles_area, (features, "10m"), rounds=50)
+
+
+def test_calculate_tiles_area_1m_benchmark(benchmark):
+    filename = "tests/fixtures/precision-testing.ldgeojson"
+    f = open(filename)
+    features = json.load(f)
+    benchmark.pedantic(calculate_tiles_area, (features, "1m"), rounds=50)
+
+
+def test_calculate_tiles_area_30cm_benchmark(benchmark):
+    filename = "tests/fixtures/precision-testing.ldgeojson"
+    f = open(filename)
+    features = json.load(f)
+    benchmark.pedantic(calculate_tiles_area, (features, "30cm"), rounds=50)
+
+
+def test_calculate_tiles_area_1cm_benchmark(benchmark):
+    filename = "tests/fixtures/precision-testing.ldgeojson"
+    f = open(filename)
+    features = json.load(f)
+    benchmark.pedantic(calculate_tiles_area, (features, "1cm"), rounds=50)
