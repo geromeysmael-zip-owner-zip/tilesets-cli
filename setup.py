@@ -36,6 +36,7 @@ setup(
         "jsonseq~=1.0",
         "mercantile~=1.1.6",
         "supermercado~=0.2.0",
+        "pytest-benchmark~=3.0.0",
     ],
     include_package_data=True,
     zip_safe=False,
